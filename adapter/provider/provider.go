@@ -339,6 +339,34 @@ func (cp *CompatibleProvider) Close() error {
 	return cp.compatibleProvider.Close()
 }
 
+// handleDialerProxy handles dialer-proxy configuration for a proxy
+// It checks if the proxy has its own dialer-proxy configuration, and if not, uses the provider's
+// It adds additional-prefix and additional-suffix to the dialer-proxy only if the dialer-proxy comes from the proxy itself
+func handleDialerProxy(mapping map[string]interface{}, providerDialerProxy string, override overrideSchema) {
+	// First, check if proxy has its own dialer-proxy configuration
+	proxyDialerProxy, hasProxyDialerProxy := mapping["dialer-proxy"].(string)
+
+	// If proxy has its own dialer-proxy configuration
+	if hasProxyDialerProxy {
+		// If additional-prefix or additional-suffix is set, add them to the dialer-proxy
+		if proxyDialerProxy != "" && (override.AdditionalPrefix != nil || override.AdditionalSuffix != nil) {
+			dialerProxyWithPrefix := proxyDialerProxy
+			if override.AdditionalPrefix != nil {
+				dialerProxyWithPrefix = fmt.Sprintf("%s%s", *override.AdditionalPrefix, dialerProxyWithPrefix)
+			}
+			if override.AdditionalSuffix != nil {
+				dialerProxyWithPrefix = fmt.Sprintf("%s%s", dialerProxyWithPrefix, *override.AdditionalSuffix)
+			}
+			mapping["dialer-proxy"] = dialerProxyWithPrefix
+		}
+	} else if providerDialerProxy != "" {
+		// If proxy doesn't have its own dialer-proxy configuration, use provider's dialer-proxy as is
+		// Don't add additional-prefix or additional-suffix to provider's dialer-proxy
+		mapping["dialer-proxy"] = providerDialerProxy
+	}
+	// If no dialer-proxy is set, do nothing
+}
+
 func NewProxiesParser(pdName string, filter string, excludeFilter string, excludeType string, dialerProxy string, override overrideSchema) (resource.Parser[[]C.Proxy], error) {
 	var excludeTypeArray []string
 	if excludeType != "" {
@@ -424,14 +452,13 @@ func NewProxiesParser(pdName string, filter string, excludeFilter string, exclud
 					continue
 				}
 
-				if len(dialerProxy) > 0 {
-					mapping["dialer-proxy"] = dialerProxy
-				}
-
 				err := override.Apply(mapping)
 				if err != nil {
 					return nil, fmt.Errorf("proxy %d override error: %w", idx, err)
 				}
+
+				// Handle dialer-proxy configuration
+				handleDialerProxy(mapping, dialerProxy, override)
 
 				proxy, err := adapter.ParseProxy(mapping, adapter.WithProviderName(pdName))
 				if err != nil {
