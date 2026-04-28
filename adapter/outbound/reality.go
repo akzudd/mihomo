@@ -34,11 +34,11 @@ func (o RealityOptions) Parse() (*tlsC.RealityConfig, error) {
 
 		n := hex.DecodedLen(len(o.ShortID))
 		if n > tlsC.RealityMaxShortIDLen {
-			return nil, errors.New("invalid REALITY short id")
+			return nil, fmt.Errorf("invalid REALITY short id: %s", o.ShortID)
 		}
 		n, err = hex.Decode(config.ShortID[:], []byte(o.ShortID))
 		if err != nil || n > tlsC.RealityMaxShortIDLen {
-			return nil, errors.New("invalid REALITY short ID")
+			return nil, fmt.Errorf("invalid REALITY short ID: %s", o.ShortID)
 		}
 
 		return config, nil

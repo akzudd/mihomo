@@ -6,7 +6,12 @@ import (
 )
 
 func Unmarshal(in []byte, out any) (err error) {
-	return yaml.Unmarshal(in, out)
+	var node yaml.Node
+	if err = yaml.Unmarshal(in, &node); err != nil {
+		return err
+	}
+	preserveStringKeyNodes(&node)
+	return node.Decode(out)
 }
 
 func Marshal(in any) (out []byte, err error) {
