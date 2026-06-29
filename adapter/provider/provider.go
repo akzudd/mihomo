@@ -340,6 +340,25 @@ func (cp *CompatibleProvider) Close() error {
 	return cp.compatibleProvider.Close()
 }
 
+func applyDialerProxyOverride(mapping map[string]any, providerDialerProxy string, override overrideSchema) {
+	if _, hasProxyDialerProxy := mapping["dialer-proxy"]; !hasProxyDialerProxy && providerDialerProxy != "" {
+		mapping["dialer-proxy"] = providerDialerProxy
+	}
+
+	dialerProxy, ok := mapping["dialer-proxy"].(string)
+	if !ok || dialerProxy == "" {
+		return
+	}
+
+	if override.AdditionalPrefix != nil {
+		dialerProxy = fmt.Sprintf("%s%s", *override.AdditionalPrefix, dialerProxy)
+	}
+	if override.AdditionalSuffix != nil {
+		dialerProxy = fmt.Sprintf("%s%s", dialerProxy, *override.AdditionalSuffix)
+	}
+	mapping["dialer-proxy"] = dialerProxy
+}
+
 func NewProxiesParser(pdName string, tunnel C.Tunnel, filter string, excludeFilter string, excludeType string, dialerProxy string, override overrideSchema, ageSecretKey string) (resource.Parser[[]C.Proxy], error) {
 	var excludeTypeArray []string
 	if excludeType != "" {
@@ -437,14 +456,12 @@ func NewProxiesParser(pdName string, tunnel C.Tunnel, filter string, excludeFilt
 					continue
 				}
 
-				if len(dialerProxy) > 0 {
-					mapping["dialer-proxy"] = dialerProxy
-				}
-
 				err := override.Apply(mapping)
 				if err != nil {
 					return nil, fmt.Errorf("proxy %d override error: %w", idx, err)
 				}
+
+				applyDialerProxyOverride(mapping, dialerProxy, override)
 
 				proxy, err := adapter.ParseProxy(mapping, adapter.WithTunnelForAPI(tunnel), adapter.WithProviderName(pdName))
 				if err != nil {
